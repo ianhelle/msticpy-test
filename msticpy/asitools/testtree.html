@@ -1,0 +1,89 @@
+<head>    <title>Pure CSS Tree</title>
+<style>
+body {
+    margin:50px;
+    font-family:'Arial', sans-serif;
+}
+*{margin:0;padding: 0;}
+
+h1 {
+    color:#FA9A39;
+}
+
+p { padding-bottom:50px;}
+
+.content {
+    width:500px;
+    margin:auto;
+}
+.tree ul {
+    margin-left: 20px;
+}
+
+.tree li {
+    list-style-type: none;
+    margin:10px;
+    position: relative;
+}
+
+.tree li::before {
+    content: "";
+    position: absolute;
+    top:-7px;
+    left:-20px;
+    border-left: 1px solid #ccc;
+    border-bottom:1px solid #ccc;
+    border-radius:0 0 0 0px;
+    width:20px;
+    height:15px;
+}
+
+.tree li::after {
+    position:absolute;
+    content:"";
+    top:8px;
+    left:-20px;
+    border-left: 1px solid #ccc;
+    border-top:1px solid #ccc;
+    border-radius:0px 0 0 0;
+    width:20px;
+    height:100%;
+}
+
+.tree li:last-child::after  {
+    display:none;
+}
+
+.tree li:last-child:before{
+    border-radius: 0 0 0 5px;
+}
+
+ul.tree>li:first-child::before {
+    display:none;
+}
+
+ul.tree>li:first-child::after {
+    border-radius:5px 0 0 0;
+}
+
+.tree li a {
+    border: 1px #ccc solid;
+    border-radius: 5px;
+    padding:2px 5px;
+}
+
+.tree li a:hover, .tree li a:hover+ul li a,
+.tree li a:focus, .tree li a:focus+ul li a {
+    background: #ccc; color: #000; border: 1px solid #000;
+}
+
+.tree li a:hover+ul li::after, .tree li a:focus+ul li::after,
+.tree li a:hover+ul li::before, .tree li a:focus+ul li::before 
+.tree li a:hover+ul::before, .tree li a:focus+ul::before 
+.tree li a:hover+ul ul::before, .tree li a:focus+ul ul::before{
+    border-color:  #000; /*connector color on hover*/
+}
+</style>
+</head>
+<body>    <div class="content">        <h1>Pure CSS Tree</h1>        <p><strong>no javascript, just simple html and css - enjoy!</strong></p>        <ul class="tree"><li>rootnode<ul><li>node1<ul><li>node1-1<ul><li>node1-1-1<li>node1-3-1<li>node1-5-1</ul></ul><li>node2<ul><li>node2-1<ul><li>node2-1-1<li>node2-3-1<li>node2-5-1</ul></ul><li>node3<li>node4<ul><li>node4-1<ul><li>node4-1-1<li>node4-3-1<li>node4-5-1</ul></ul><li>node5<ul><li>node5-1<ul><li>node5-1-1<li>node5-3-1<li>node5-5-1</ul></ul><li>node6<li>node7<ul><li>node7-1<ul><li>node7-1-1<li>node7-3-1<li>node7-5-1</ul></ul><li>node8<ul><li>node8-1<ul><li>node8-1-1<li>node8-3-1<li>node8-5-1</ul></ul><li>node9<li>node10<ul><li>node10-1<ul><li>node10-1-1<li>node10-3-1<li>node10-5-1</ul></ul><li>node11<ul><li>node11-1<ul><li>node11-1-1<li>node11-3-1<li>node11-5-1</ul></ul><li>node12<li>node13<ul><li>node13-1<ul><li>node13-1-1<li>node13-3-1<li>node13-5-1</ul></ul><li>node14<ul><li>node14-1<ul><li>node14-1-1<li>node14-3-1<li>node14-5-1</ul></ul><li>node15<li>node16<ul><li>node16-1<ul><li>node16-1-1<li>node16-3-1<li>node16-5-1</ul></ul><li>node17<ul><li>node17-1<ul><li>node17-1-1<li>node17-3-1<li>node17-5-1</ul></ul><li>node18<li>node19<ul><li>node19-1<ul><li>node19-1-1<li>node19-3-1<li>node19-5-1</ul></ul></ul>        </ul>    </div>
+</body>
