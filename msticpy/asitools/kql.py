@@ -14,8 +14,8 @@ from Kqlmagic import results
 from . query_builtin_queries import query_definitions
 # pylint: disable=locally-disabled, W0611
 # (list_queries not used here but want to bring in into module namespace)
-from . query_mgr import (replace_prov_query_params, list_queries, 
-                         clean_kql_query, query_help)
+from . query_mgr import (replace_prov_query_params, list_queries,
+                         clean_kql_query, query_help, print_kql)
 # pylint: enable=locally-disabled, W0611
 from . utility import export
 
@@ -74,6 +74,9 @@ def exec_query(query_name: str, **kwargs) -> (pd.DataFrame, results.ResultSet):
                 (override default values and values extracted
                 from QueryParamProviders).
     Returns:
+        dataframe {pd.DataFrame}: if kql_result == False (default).
+        (dataframe, ResultSet): tuple of dataframe and Kql ResultSet
+            if kql_result==True (pass this as a kw argument).
 
     """
     if 'kql_result' in kwargs:
@@ -85,7 +88,7 @@ def exec_query(query_name: str, **kwargs) -> (pd.DataFrame, results.ResultSet):
     replaced_query = clean_kql_query(replaced_query)
     if replaced_query:
         result = _ip.run_cell_magic('kql', line='', cell=replaced_query)
-        if result.completion_query_info['StatusCode'] == 0:
+        if result is not None and result.completion_query_info['StatusCode'] == 0:
             data_frame = result.to_dataframe()
             if result.is_partial_table:
                 print("Warning - query returned partial results.")
@@ -98,6 +101,40 @@ def exec_query(query_name: str, **kwargs) -> (pd.DataFrame, results.ResultSet):
         print("Warning - query did not complete successfully.")
         print("Kql ResultSet returned - check  \'completion_query_info\' property.")
         return result
+
+
+@export
+def get_query(query_name: str, **kwargs) -> (pd.DataFrame, results.ResultSet):
+    """
+    Print the kql query with replaced parameter values.
+
+    Use list_queries() to see the current set).
+    Use query_help(query_name) to view the query and expected paramaters
+    Arguments:
+        query_name {string}: the name of query to run
+        kwargs: additional replacable paramters for the query
+            {string:bool} kql_result=True - return (DataFrame, KqlResultSet)
+                    tuple.
+                    kql_result=False - return DataFrame only (default)
+            {string:[QueryParamProvider]} - for the key 'provs'
+                (or alias 'providers')
+                this should be a collection of objects that
+                implement QueryParamProvider (from which query
+                parameters can be extracted).
+                OR
+            {string:value pairs} -- custom parameter list
+                (override default values and values extracted
+                from QueryParamProviders).
+    Returns:
+        replaced_query {str}: the query with substituted parameters.
+
+    """
+    replaced_query = replace_prov_query_params(query_name=query_name, **kwargs)
+    if replaced_query:
+        print_kql(replaced_query)
+        return replaced_query
+    else:
+        raise ValueError('Could not replace query parameters correctly.')
 
 
 def _add_queries_to_module(module_name):

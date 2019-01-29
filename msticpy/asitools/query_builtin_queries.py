@@ -14,10 +14,11 @@ query_definitions = dict()
 
 
 KNOWN_PARAM_NAMES = ['table', 'query_project', 'start', 'end',
-                     'provider_alert_id', 'subscription_filter',
-                     'host_filter_eq', 'host_filter_neq',
+                     'system_alert_id', 'subscription_filter',
+                     'host_filter_eq', 'host_filter_neq', 'host_name',
                      'account_name', 'process_name', 'process_id',
-                     'logon_session_id', 'path_separator', 'commandline']
+                     'logon_session_id', 'path_separator', 'commandline',
+                     'source_ip_list']
 
 
 def _add_query(kql_query):
@@ -68,7 +69,7 @@ _add_query(KqlQuery(name='get_alert',
 | extend extendedProps = parse_json(ExtendedProperties)
 | extend CompromisedEntity = tostring(extendedProps['Compromised Host'])
 | project-away extendedProps
-| where ProviderAlertId == \'{provider_alert_id}\'
+| where SystemAlertId == \'{system_alert_id}\'
 ''',
                     description='Retrieves an alert by alert Id',
                     data_source='security_alert',
@@ -77,29 +78,80 @@ _add_query(KqlQuery(name='get_alert',
 
 _add_query(KqlQuery(name='list_related_alerts',
                     query='''
+let src_host = \'{host_name}\';
+let src_acct = \'{account_name}\';
+let src_proc = \'{process_name}\';
 {table}
 {query_project}
 | where {subscription_filter}
 | where TimeGenerated >= datetime({start})
 | where TimeGenerated <= datetime({end})
-| extend extendedProps=parse_json(ExtendedProperties)
-| extend CompromisedEntity = tostring(extendedProps['Compromised Host'])
-| extend host = extract("\\"HostName\\": \\"([^\\"]+)\\",", 1, Entities)
-| extend dom = extract("\\"DnsDomain\\": \\"([^\\"]+)\\",", 1, Entities)
-| extend Computer = iif(isempty(dom), host, strcat(host, ".", dom))
-| extend accountName = tostring(extendedProps["User Name"])
-| extend processName = tostring(extendedProps["Suspicious Process"])
-| extend CompromisedEntity = iif(isempty(CompromisedEntity), Computer, CompromisedEntity)
-| where {host_filter_eq} or accountName =~ \'{account_name}\' or processName =~ \'{process_name}\'
-| extend host_match = ({host_filter_eq})
-| extend acct_match = (accountName =~ \'{account_name}\')
-| extend proc_match = (processName =~ \'{process_name}\')
+| extend Computer = src_host
+| extend src_hostname = tostring(split(src_host, '.')[0])
+| extend src_accountname = iif(src_acct contains '\\\\',
+                               tostring(split(src_acct, '\\\\')[-1]),
+                               tostring(split(src_acct, '@')[0]))
+| extend src_procname = tostring(split(src_proc, \'{path_separator}\')[-1])
+| extend host_match = iif(isnotempty(src_host) and
+    (Entities has src_hostname or Entities has src_host
+     or ExtendedProperties has src_hostname
+     or ExtendedProperties has src_host), true, false)
+| extend acct_match = iif(isnotempty(src_acct)
+     and (Entities has src_accountname or Entities has src_acct
+     or ExtendedProperties has src_accountname
+     or ExtendedProperties has src_acct), true, false)
+| extend proc_match = iif(isnotempty(src_acct)
+     and (Entities has src_procname or Entities has src_proc
+     or ExtendedProperties has src_procname
+     or ExtendedProperties has src_proc), true, false)
+| where host_match or acct_match or proc_match
                    ''',
                     description='Retrieves list of alerts with a common host, acount or process',
                     data_source='security_alert',
                     data_families=[DataFamily.SecurityAlert],
                     data_environments=[DataEnvironment.LogAnalytics],
                     optional_params=['process_name', 'account_name']))
+
+_add_query(KqlQuery(name='list_related_ip_alerts',
+                    query='''
+let src_ips = \'{source_ip_list}\';
+let src_ips_arr = split(src_ips, ',');
+let IP_table = toscalar(range idx from 0 to array_length(src_ips_arr) - 1 step 1
+| extend ip = trim(@'\\s*', tostring(src_ips_arr[idx]))
+| project ip
+| distinct ip
+| summarize makeset(ip) );
+let ip_extract = materialize(
+{table}
+{query_project}
+| where {subscription_filter}
+| where TimeGenerated >= datetime({start})
+| where TimeGenerated <= datetime({end})
+| project SystemAlertId, ExtendedProperties, Entities
+| extend source_ips_str = extract("\\"Source IPs\\": \\"([^\\"]+)\\"", 1, ExtendedProperties)
+| extend source_ips_1 = iif(isnotempty(source_ips_str), split(source_ips_str, ','), dynamic([]))
+| extend source_ips_2 = extract_all("\\"Address\\": \\"([^\\"]+)\\"", dynamic([1]), Entities)
+| mvexpand alert_ip_1 = source_ips_1 to typeof(string), alert_ip_2 = source_ips_2 to typeof(string)
+| where isnotempty(alert_ip_1) or isnotempty(alert_ip_2)
+| where alert_ip_1 in (IP_table) or alert_ip_2 in (IP_table)
+| extend matching_ips = case(isnotempty(alert_ip_1) and isnotempty(alert_ip_2), strcat(alert_ip_1, ',', alert_ip_2),
+                             isnotempty(alert_ip_1), alert_ip_1,
+                             isnotempty(alert_ip_2), alert_ip_2,
+                             '')
+| extend MatchingIps = split(matching_ips, ',')
+| project-away source_ips_str, source_ips_1, source_ips_2, alert_ip_1, alert_ip_2, matching_ips
+);
+{table}
+{query_project}
+| where {subscription_filter}
+| where TimeGenerated >= datetime({start})
+| where TimeGenerated <= datetime({end})
+| join (ip_extract) on SystemAlertId
+''',
+                    description='Retrieves list of alerts with a common IP Address',
+                    data_source='security_alert',
+                    data_families=[DataFamily.SecurityAlert],
+                    data_environments=[DataEnvironment.LogAnalytics]))
 
 _add_query(KqlQuery(name='get_process_tree',
                     query='''
@@ -267,8 +319,8 @@ _add_query(KqlQuery(name='list_hosts_matching_commandline',
 {query_project}
 | where {subscription_filter}
 | where {host_filter_neq}
-| where TimeCreatedUtc >= datetime({start})
-| where TimeCreatedUtc <= datetime({end})
+| where TimeGenerated >= datetime({start})
+| where TimeGenerated <= datetime({end})
 | where NewProcessName endswith \'{process_name}\'
 | where CommandLine =~ \'{commandline}\'
 ''',
@@ -284,8 +336,8 @@ _add_query(KqlQuery(name='list_processes_in_session',
 {query_project}
 | where {subscription_filter}
 | where {host_filter_eq}
-| where TimeCreatedUtc >= datetime({start})
-| where TimeCreatedUtc <= datetime({end})
+| where TimeGenerated >= datetime({start})
+| where TimeGenerated <= datetime({end})
 | where SubjectLogonId == \'{logon_session_id}\'
 | extend processName = tostring(split(NewProcessName, \'{path_separator}\')[-1])
 | extend commandlineparts = arraylength(split(CommandLine, ' '))
@@ -297,18 +349,48 @@ _add_query(KqlQuery(name='list_processes_in_session',
                                    DataFamily.LinuxSecurity],
                     data_environments=[DataEnvironment.LogAnalytics]))
 
-_add_query(KqlQuery(name='get_logon_session',
+_add_query(KqlQuery(name='get_host_logon',
                     query='''
 {table}
 {query_project}
 | where {subscription_filter}
 | where {host_filter_eq}
-| where TimeCreatedUtc >= datetime({start}) - time(1d)
-| where TimeCreatedUtc <= datetime({end})
+| where TimeGenerated >= datetime({start})
+| where TimeGenerated <= datetime({end})
 | where TargetLogonId == \'{logon_session_id}\'
 ''',
                     description='Retrieves the logon event for the session id on the host.',
                     data_source='account_logon',
+                    data_families=[DataFamily.WindowsSecurity,
+                                   DataFamily.LinuxSecurity],
+                    data_environments=[DataEnvironment.LogAnalytics]))
+
+_add_query(KqlQuery(name='list_host_logons',
+                    query='''
+{table}
+{query_project}
+| where {subscription_filter}
+| where {host_filter_eq}
+| where TimeGenerated >= datetime({start})
+| where TimeGenerated <= datetime({end})
+''',
+                    description='Retrieves the logon events on the host.',
+                    data_source='account_logon',
+                    data_families=[DataFamily.WindowsSecurity,
+                                   DataFamily.LinuxSecurity],
+                    data_environments=[DataEnvironment.LogAnalytics]))
+
+_add_query(KqlQuery(name='list_host_logon_failures',
+                    query='''
+{table}
+{query_project}
+| where {subscription_filter}
+| where {host_filter_eq}
+| where TimeGenerated >= datetime({start})
+| where TimeGenerated <= datetime({end})
+''',
+                    description='Retrieves the logon failure events on the host.',
+                    data_source='account_logon_fail',
                     data_families=[DataFamily.WindowsSecurity,
                                    DataFamily.LinuxSecurity],
                     data_environments=[DataEnvironment.LogAnalytics]))

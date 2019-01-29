@@ -11,6 +11,7 @@ import os
 import re
 from datetime import datetime, timedelta
 from enum import Enum
+from typing import Callable
 
 import pandas as pd
 from IPython.display import display
@@ -35,7 +36,7 @@ class TimeUnit(Enum):
     day = 60 * 60 * 24
 
 
-def _parse_time_unit(unit_str: str):
+def _parse_time_unit(unit_str: str) -> TimeUnit:
     """Return the TimeUnit enum matching the input string."""
     if unit_str.startswith('m'):
         return TimeUnit.min
@@ -49,7 +50,7 @@ def _parse_time_unit(unit_str: str):
 
 
 @export
-class Lookback(object):
+class Lookback(QueryParamProvider):
     """
     ipwidget wrapper to display integer slider.
 
@@ -59,20 +60,25 @@ class Lookback(object):
 
     """
 
-    def __init__(self, defaulttime=4, label='Select time ({units}) to look back',
-                 min_value=1, max_value=240, units='hour'):
+    def __init__(self, default: int = 4, label: str = 'Select time ({units}) to look back',
+                 origin_time: datetime = None, min_value: int = 1, max_value: int = 240,
+                 units: str = 'hour', auto_display: bool = False):
         """
         Create an instance of the lookback slider widget.
 
-            :param defaulttime=4: Default value.
+            :param default=4: Default value.
             :param label='Select time (hrs) to look back': prompt string
             :param min_value=1: Minimum value of range.
             :param max_value=240: Maximum value of range.
+            :param origin_time: The time from which to calculate the lookback offset
         """
+        # default to now
+        self.origin_time = datetime.utcnow() if origin_time is None else origin_time
+
         self._time_unit = _parse_time_unit(units)
         if '{units}' in label:
             label = label.format(units=self._time_unit)
-        self._lookback_wgt = widgets.IntSlider(value=defaulttime,
+        self._lookback_wgt = widgets.IntSlider(value=default,
                                                min=min_value,
                                                max=max_value,
                                                step=1,
@@ -80,6 +86,15 @@ class Lookback(object):
                                                layout=Layout(
                                                    width='60%', height='50px'),
                                                style={'description_width': 'initial'})
+
+        self.end = datetime.utcnow
+        self._time_unit = _parse_time_unit(units)
+        self.start = self.end - timedelta(self._time_unit * self._lookback_wgt.value)
+
+        self._lookback_wgt.observe(self._time_range_change, names='value')
+
+        if auto_display:
+            self.display()
 
     def display(self):
         """Display the interactive widgets."""
@@ -94,6 +109,27 @@ class Lookback(object):
     def value(self):
         """Return current widget lookback value."""
         return self._lookback_wgt.value
+
+    def _time_range_change(self, change):
+        del change
+        self.start = (self.origin_time +
+                      timedelta(0, self._lookback_wgt.value[0] * self._time_unit.value))
+        self.end = (self.origin_time +
+                    timedelta(0, self._lookback_wgt.value[1] * self._time_unit.value))
+
+    @property
+    def query_params(self):
+        """
+        Query parameters derived from alert.
+
+        Returns:
+            dict(str, str) -- Dictionary of parameter names
+
+        """
+        return {
+            'start': self.start,
+            'end': self.end
+        }
 
 
 @export
@@ -112,8 +148,9 @@ class QueryTime(QueryParamProvider):
 
     _label_style = {'description_width': 'initial'}
 
-    def __init__(self, origin_time: datetime = None, before=60, after=10,
-                 max_before=600, max_after=100, label=None, units='min'):
+    def __init__(self, origin_time: datetime = None, before: int = 60, after: int = 10,
+                 max_before: int = 600, max_after: int = 100, label: str = None,
+                 units: str = 'min', auto_display: bool = False):
         """
         Create new instance of QueryTime.
 
@@ -179,6 +216,9 @@ class QueryTime(QueryParamProvider):
         self._w_tm_range.observe(self._time_range_change, names='value')
         self._w_origin_dt.observe(self._update_origin, names='value')
         self._w_origin_tm.observe(self._update_origin, names='value')
+
+        if auto_display:
+            self.display()
 
     def display(self):
         """Display the interactive widgets."""
@@ -248,9 +288,10 @@ class AlertSelector(QueryParamProvider):
 
     """
 
-    _ALERTID_REGEX = r'\[id:(?P<alert_id>[\da-fA-F]{8}-(?:[\da-fA-F]{4}-){3}[\da-fA-F]{12})\]$'
+    _ALERTID_REGEX = r'\[id:(?P<alert_id>.*)\]$'
 
-    def __init__(self, alerts, action=None, columns=None):
+    def __init__(self, alerts: pd.DataFrame, action: Callable[..., None] = None,
+                 columns: list({str})=None, auto_display: bool = False):
         """
         Create a new instance of AlertSelector.
 
@@ -262,7 +303,7 @@ class AlertSelector(QueryParamProvider):
 
         if not columns:
             columns = ['StartTimeUtc', 'AlertName',
-                       'CompromisedEntity', 'ProviderAlertId']
+                       'CompromisedEntity', 'SystemAlertId']
         items = alerts[columns]
         items = items.sort_values('StartTimeUtc', ascending=True)
         self._select_items = \
@@ -285,6 +326,9 @@ class AlertSelector(QueryParamProvider):
         self._w_filter_alerts.observe(self._update_options, names='value')
         self._w_select_alert.observe(self._select_alert, names='value')
 
+        if auto_display:
+            self.display()
+
     def display(self):
         """Display the interactive widgets."""
         display(widgets.VBox([self._w_filter_alerts,
@@ -296,7 +340,7 @@ class AlertSelector(QueryParamProvider):
         return '{time}  {alert} ({host}) [id:{id}]'.format(time=alert_row.StartTimeUtc,
                                                            alert=alert_row.AlertName,
                                                            host=alert_row.CompromisedEntity,
-                                                           id=alert_row.ProviderAlertId)
+                                                           id=alert_row.SystemAlertId)
 
     def _update_options(self, change):
         """Filter the alert list by substring."""
@@ -320,7 +364,7 @@ class AlertSelector(QueryParamProvider):
 
     def _get_alert(self, alert_id):
         self.alert_id = alert_id
-        selected_alerts = self.alerts[self.alerts['ProviderAlertId'] == alert_id]
+        selected_alerts = self.alerts[self.alerts['SystemAlertId'] == alert_id]
 
         if selected_alerts.shape[0] > 0:
             alert = pd.Series(selected_alerts.iloc[0])
@@ -353,7 +397,7 @@ class GetSingleAlert(QueryParamProvider):
     """
     GetSingleAlert.
 
-    Try to fetch a single alert by ProviderAlertId.
+    Try to fetch a single alert by SystemAlertId.
 
     Attributes:
         selected_alert: the selected alert
@@ -362,7 +406,8 @@ class GetSingleAlert(QueryParamProvider):
 
     """
 
-    def __init__(self, action=None, max_lookback: int = 28, query_time_provider=None):
+    def __init__(self, action: Callable[..., None] = None, max_lookback: int = 28,
+                 query_time_provider=None, auto_display: bool = False):
         """
         Create a new instance of GetSingleAlert.
 
@@ -394,8 +439,8 @@ class GetSingleAlert(QueryParamProvider):
 
         self._w_target_alert = widgets.Text(
             value=self.alert_id,
-            placeholder='ProviderAlertId',
-            description='ProviderAlertId for alert :',
+            placeholder='SystemAlertId',
+            description='SystemAlertId for alert :',
             layout=Layout(width='50%'),
             style={'description_width': 'initial'})
 
@@ -403,6 +448,9 @@ class GetSingleAlert(QueryParamProvider):
         self._w_fetch_button.on_click(self._click_get_alert)
 
         self._w_output = widgets.Output(layout={'border': '1px solid black'})
+
+        if auto_display:
+            self.display()
 
     @property
     def query_params(self):
@@ -444,7 +492,7 @@ class GetSingleAlert(QueryParamProvider):
 
     def _get_alert(self, alert_id):
         self.alert_id = alert_id
-        selected_alerts = self.alerts[self.alerts['ProviderAlertId'] == alert_id]
+        selected_alerts = self.alerts[self.alerts['SystemAlertId'] == alert_id]
 
         if selected_alerts.shape[0] > 0:
             alert = pd.Series(selected_alerts.iloc[0])
@@ -474,7 +522,8 @@ class GetEnvironmentKey(object):
 
     """
 
-    def __init__(self, env_var, help_str=None, prompt="Enter the value: "):
+    def __init__(self, env_var: str, help_str: str = None, prompt: str = "Enter the value: ",
+                 auto_display: bool = False):
         """
         Create a new instance of GetEnvironmentKey.
 
@@ -503,6 +552,9 @@ class GetEnvironmentKey(object):
         self._w_save_button.on_click(self._on_save_button_clicked)
         self._hbox = widgets.HBox(
             [self._w_text, self._w_save_button, self._w_check_save])
+
+        if auto_display:
+            self.display()
 
     @property
     def value(self):
@@ -534,13 +586,14 @@ class SelectString(object):
 
     """
 
-    def __init__(self, description=None, item_list=None, item_dict=None):
+    def __init__(self, description: str = None, item_list: list({str})=None,
+                 item_dict: dict({str: str})=None, auto_display: bool = False):
         """
         Initialize and display list picker.
 
             :param description=None: List label
             :param item_list=None: Item List
-            :param item_dict=None: Item dictionary { display: value }
+            :param item_dict=None: Item dictionary { display_string: value }
         """
         if item_list:
             self._item_list = item_list
@@ -559,6 +612,8 @@ class SelectString(object):
                                           layout=Layout(
                                               width='50%', height='100px'),
                                           style={'description_width': 'initial'})
+        if auto_display:
+            self.display()
 
     def _select_item(self, value=''):
         if self._item_dict:

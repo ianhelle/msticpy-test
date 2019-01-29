@@ -6,6 +6,7 @@
 """Module for SecurityAlert class."""
 import html
 import re
+from datetime import datetime
 from collections import Counter
 
 import pandas as pd
@@ -21,7 +22,7 @@ __author__ = 'Ian Hellen'
 _ID_PROPERTIES = ['AzSubscriptionId', 'AzResourceId', 'WorkspaceId', 'AgentId',
                   'TenantId', 'SourceComputerId', 'ResourceId',
                   'WorkspaceSubscriptionId', 'WorkspaceResourceGroup',
-                  'ProviderAlertId', 'ResourceId']
+                  'ProviderAlertId', 'SystemAlertId', 'ResourceId']
 
 
 class SecurityBase(QueryParamProvider):
@@ -70,7 +71,7 @@ class SecurityBase(QueryParamProvider):
         """Return the value of the named property 'name'."""
         if name in self._source_data:
             return self._source_data[name]
-        return None
+        raise AttributeError(f'{name} is not a valid attribute.')
 
     def __str__(self):
         """Return string representation of object properties."""
@@ -83,6 +84,22 @@ class SecurityBase(QueryParamProvider):
                 str_entities.append(str(ent).replace('\n', ', '))
             str_props = str_props + str_entities
         return '\n'.join(str_props)
+
+    # def __getstate__(self):
+    #     """Return dictionary of state for serialization/pickling."""
+    #     state_dict = {}
+    #     state_dict['source_data'] = (self._source_data)
+    #     state_dict['Entities'] = self._entities
+    #     state_dict['path_separator'] = self.path_separator
+    #     state_dict['os_family'] = self.os_family
+    #     return state_dict
+
+    # def __setstate__(self, state):
+    #     """Set state from dictionary for deserialization/unpickling."""
+    #     self._source_data = state['source_data']
+    #     self._entities = list(state['Entities'])
+    #     self.path_separator = state['path_separator']
+    #     self.os_family = state['os_family']
 
     # Properties
     @property
@@ -167,23 +184,27 @@ class SecurityBase(QueryParamProvider):
             dict(str, str) -- Dictionary of parameter names
 
         """
+        host_name = self.primary_host.fqdn
         proc_name = (self.primary_process.ImageFile.FullPath if
                      self.primary_process and self.primary_process.ImageFile
                      else None)
         acct_name = self.primary_account.qualified_name if self.primary_account else None
+        path_separator = self.path_separator
         if self.data_family == DataFamily.WindowsSecurity:
             proc_name = escape_windows_path(proc_name)
             acct_name = escape_windows_path(acct_name)
+            path_separator = escape_windows_path(self.path_separator)
 
         dyn_query_params = {
             'subscription_filter': self.subscription_filter(),
             'host_filter_eq': self.host_filter(operator='=='),
             'host_filter_neq': self.host_filter(operator='!='),
+            'host_name': host_name,
             'account_name': acct_name,
             'process_name': proc_name,
             'logon_session_id': self.get_logon_id(),
             'process_id': (self.primary_process.ProcessId if self.primary_process else None),
-            'path_separator': self.path_separator,
+            'path_separator': path_separator,
             'data_family': self.data_family,
             'data_environment': self.data_environment
         }
@@ -207,6 +228,11 @@ class SecurityBase(QueryParamProvider):
             return DataEnvironment.LogAnalytics
         else:
             return DataEnvironment.Kusto
+
+    @property
+    def origin_time(self) -> datetime:
+        """Return the datetime of event."""
+        return self.TimeGenerated
 
     def get_entity_property(self, entity_property, entity_type=None, entity=None):
         """

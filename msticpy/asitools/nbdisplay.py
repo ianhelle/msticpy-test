@@ -5,18 +5,14 @@
 # --------------------------------------------------------------------------
 """Module for common display functions."""
 
-import datetime
-import textwrap
-
 import matplotlib.pyplot as plt
 import networkx as nx
-import numpy as np
+
 import pandas as pd
 from bokeh.io import output_notebook, show
-from bokeh.layouts import Spacer, column, layout, row
-from bokeh.models import (BoxAnnotation, ColumnDataSource, DateRangeSlider,
-                          DatetimeTickFormatter, HoverTool, Label, LabelSet)
-from bokeh.plotting import figure, output_notebook, reset_output, show
+from bokeh.models import (ColumnDataSource, DatetimeTickFormatter,
+                          HoverTool, Label)
+from bokeh.plotting import figure, reset_output
 from IPython.core.display import HTML, display
 from IPython.display import Javascript
 
@@ -78,15 +74,17 @@ def _print_process(process_row: pd.Series):
 
     spaces = 20 * level * 2
     if process_row.NodeRole == 'source':
-        line1 = '<b>[alert:{}] {} {}</b> [PID: {}, SubSess:{}, TargSess:{}]'.format(
-            process_row.Level,
-            process_row.TimeCreatedUtc,
-            process_row.NewProcessName,
-            process_row.NewProcessId,
-            process_row.SubjectLogonId,
-            process_row.TargetLogonId)
+        line1 = '''
+        <span style="color:red;font-weight:bold">[alert:lev{}] {} {}
+        [PID: {}, SubjSess:{}, TargSess:{}]</span>
+        '''.format(process_row.Level,
+                   process_row.TimeCreatedUtc,
+                   process_row.NewProcessName,
+                   process_row.NewProcessId,
+                   process_row.SubjectLogonId,
+                   process_row.TargetLogonId)
     else:
-        line1 = '[{}:{}] {} <b>{}</b> [PID: {}, SubSess:{}, TargSess:{}]'.format(
+        line1 = '[{}:lev{}] {} <b>{}</b> [PID: {}, SubjSess:{}, TargSess:{}]'.format(
             process_row.NodeRole,
             process_row.Level,
             process_row.TimeCreatedUtc,
@@ -98,9 +96,9 @@ def _print_process(process_row: pd.Series):
     line2 = '(Cmdline: \'{}\') [Account: \'{}\']'.format(
         process_row.CommandLine, process_row.SubjectUserName)
 
-    display(HTML('<p style="margin-left: {indent}px">{txt}<br>{txt2}</p>'.format(indent=spaces,
-                                                                                 txt=line1,
-                                                                                 txt2=line2)))
+    display(HTML('<div style="margin-left:{indent}px">{txt}<br>{txt2}</div>'.format(indent=spaces,
+                                                                                    txt=line1,
+                                                                                    txt2=line2)))
 
 
 @export
@@ -111,13 +109,15 @@ def display_process_tree(process_tree: pd.DataFrame):
         :param process_tree
     """
     tree = process_tree[['TimeCreatedUtc', 'NodeRole', 'Level', 'NewProcessName',
-                         'CommandLine', 'SubjectUserName', 'NewProcessId', 'ProcessId']]
+                         'CommandLine', 'SubjectUserName', 'NewProcessId', 'ProcessId',
+                         'SubjectLogonId', 'TargetLogonId']]
     tree = tree.sort_values(by=['TimeCreatedUtc'], ascending=False)
 
     display(HTML("<h3>Alert process tree:</h3>"))
     tree.sort_values(by=['TimeCreatedUtc']).apply(_print_process, 1)
 
 
+@export
 def exec_remaining_cells():
     """Execute all cells below currently selected cell."""
     Javascript("Jupyter.notebook.execute_cells_below()")
@@ -168,9 +168,9 @@ def draw_alert_entity_graph(nx_graph: nx.Graph, font_size: int = 12,
 
 
 @export
-def display_timeline(data, alert=None, overlay_data=None,
-                     time_column='TimeGenerated',
-                     source_columns=None):
+def display_timeline(data, alert=None, overlay_data=None, title: str = None,
+                     time_column: str = 'TimeGenerated',
+                     source_columns: list = None):
     """
     Display a timeline of events.
 
@@ -187,8 +187,10 @@ def display_timeline(data, alert=None, overlay_data=None,
     reset_output()
     output_notebook()
 
+# pylint: disable=C0103
     WRAP = 50
     WRAP_CMDL = 'WrapCmdl'
+# pylint: enable=C0103
     y_max = 1
 
     if not source_columns:
@@ -239,11 +241,16 @@ def display_timeline(data, alert=None, overlay_data=None,
         # ,mode='vline'
     )
 
+    if not title:
+        title = 'Event Timeline (hover over item to see details)'
+    else:
+        title = '{} Timeline (hover over item to see details)'.format(title)
+
     # tools = 'pan, box_zoom, wheel_zoom, reset, undo, redo, save, hover'
     plot = figure(min_border_left=50, plot_height=300, plot_width=1000,
                   x_axis_label='Event Time', x_axis_type='datetime', x_minor_ticks=10,
                   tools=[hover, 'pan', 'xwheel_zoom', 'box_zoom', 'reset'],
-                  title='Event Timeline (hover over item to see details)')
+                  title=title)
     plot.yaxis.visible = False
 
     # Tick formatting for different zoom levels
@@ -265,7 +272,7 @@ def display_timeline(data, alert=None, overlay_data=None,
                     alpha=0.5, size=10, source=overlay_source)
 
     # Adding data labels stops everything working!
-    # labels = LabelSet(x=time_column, y='y_index', y_offset=5, 
+    # labels = LabelSet(x=time_column, y='y_index', y_offset=5,
     #                   text='NewProcessName', source=source,
     #                   angle='90deg', text_font_size='8pt')
     # p.add_layout(labels)
@@ -294,12 +301,12 @@ def _wrap_text(source_string, wrap_len):
     out_line = ''
     for part in input_parts:
         if len(part) > wrap_len:
-            if len(out_line) > 0:
+            if out_line:
                 out_string += out_line + '\n'
                 out_line = ''
             out_line = part[0:wrap_len] + '...'
         else:
-            if len(out_line) > 0:
+            if out_line:
                 out_line += ' ' + part
             else:
                 out_line = part
@@ -308,3 +315,77 @@ def _wrap_text(source_string, wrap_len):
                 out_line = ''
 
     return out_string
+
+
+# Constants for Windows logon
+_WIN_LOGON_TYPE_MAP = {2: 'Interactive', 3: 'Network', 4: 'Batch', 5: 'Service',
+                       7: 'Unlock', 8: 'NetworkCleartext', 9: 'NewCredentials',
+                       10: 'RemoteInteractive', 11: 'CachedInteractive'}
+_WINDOWS_SID = {'S-1-0-0': 'Null SID', 'S-1-5-18': 'LOCAL_SYSTEM',
+                'S-1-5-19': 'LOCAL_SERVICE', 'S-1-5-20': 'NETWORK_SERVICE'}
+_ADMINISTRATOR_SID = '500'
+_GUEST_SID = '501'
+_DOM_OR_MACHINE_SID = 'S-1-5-21'
+
+
+@export
+def display_logon_data(logon_event: pd.DataFrame, alert: SecurityAlert = None,
+                       os_family: str = None):
+    """
+    Display logon data for one or more events.
+
+    Arguments:
+        :logon_event: Dataframe containing one or more logon events
+        :security alert: obtain os_family from the security alert
+        :os_family: explicitly specify os_family (Linux or Windows)
+
+    """
+    if not os_family:
+        os_family = alert.os_family if alert else 'Windows'
+
+    for _, logon_row in logon_event.iterrows():
+        print('### Account Logon')
+        print('Account: ', logon_row['TargetUserName'])
+        print('Account Domain: ', logon_row['TargetDomainName'])
+        print('Logon Time: ', logon_row['TimeGenerated'])
+
+        if os_family == 'Windows':
+            logon_type = logon_row['LogonType']
+            print(f'Logon type: {logon_type} ({_WIN_LOGON_TYPE_MAP[logon_type]})')
+
+        account_id = logon_row.TargetUserSid
+        print('User Id/SID: ', account_id)
+        if os_family == 'Windows':
+            _print_sid_info(account_id)
+        else:
+            print('Audit user: ', logon_row['audit_user'])
+
+        session_id = logon_row['TargetLogonId']
+        print(f'Session id \'{session_id}\'', end='  ')
+        if session_id == '0x3e7' or session_id == '-1':
+            print('System logon session')
+
+        print()
+        domain = logon_row['SubjectDomainName']
+        if not domain:
+            subj_account = logon_row.SubjectUserName
+        else:
+            subj_account = f'{domain}/{logon_row.SubjectUserName}'
+        print('Subject (source) account: ', subj_account)
+
+        print('Logon process: ', logon_row['LogonProcessName'])
+        print('Authentication: ', logon_row['AuthenticationPackageName'])
+        print('Source IpAddress: ', logon_row['IpAddress'])
+        print('Source Host: ', logon_row['WorkstationName'])
+        print('Logon status: ', logon_row['Status'])
+
+
+def _print_sid_info(sid):
+    if sid in _WINDOWS_SID:
+        print('    SID {} is {}'.format(sid, _WINDOWS_SID[sid]))
+    elif sid.endswith(_ADMINISTRATOR_SID):
+        print('    SID {} is administrator'.format(sid))
+    elif sid.endswith(_GUEST_SID):
+        print('    SID {} is guest'.format(sid))
+    if sid.startswith(_DOM_OR_MACHINE_SID):
+        print('    SID {} is local machine or domain account'.format(sid))

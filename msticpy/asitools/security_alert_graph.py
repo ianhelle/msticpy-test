@@ -39,7 +39,7 @@ def create_alert_graph(alert: SecurityAlert):
 
         alertentity_graph.add_node(e_name, entitytype=entity['Type'], name=e_name,
                                    description=e_desc, color='green',
-                                   node_type='entity', source=entity)
+                                   node_type='entity', source=str(entity))
 
         # add an edge by default to the alert
         alertentity_graph.add_edge(alert['AlertType'], e_name)
@@ -86,7 +86,9 @@ def add_related_alerts(related_alerts: pd.DataFrame, alertgraph: nx.Graph) ->nx.
     alert_host_node = _find_graph_node(related_alerts_graph, 'host', '')
 
     related_alerts.apply(lambda x: _add_alert_node(related_alerts_graph, x), axis=1)
-    related_alerts.apply(lambda x: _add_related_alert_edges(related_alerts_graph, x, alert_host_node), axis=1)
+    related_alerts.apply(lambda x: _add_related_alert_edges(related_alerts_graph,
+                                                            x,
+                                                            alert_host_node), axis=1)
     return related_alerts_graph
 
 
@@ -115,59 +117,6 @@ def _add_related_alert_edges(related_alerts_graph, alert_row, default_node):
     # add one to the alert
     if not related_alerts_graph[related_alert['AlertType'] + '(R)']:
         _add_related_alert_edge(related_alerts_graph, default_node, related_alert)
-
-# def _add_event_node(log_event:pd.Series, nxgraph:nx.Graph, linked_node:nx.no) ->nx.Graph:
-#     node_name = '{}:{}'.format(log_event['EventID'], log_event['TimeCreatedUtc'])
-
-# def create_event_graph(log_event: SecurityAlert):
-
-#     alertentity_graph = nx.Graph(id='Event')
-
-#     alertentity_graph.add_node(log_event['AlertType'],
-#                             name=alert['AlertType'],
-#                             time=str(alert['StartTimeUtc']),
-#                             description='Alert: ' + alert['AlertDisplayName'],
-#                             color='red',
-#                             node_type='alert'#,
-#                             #source=alert.to_dict()
-#                             )
-
-#     # Cycle through entities
-#     for entity in alert.entities:
-#         (name, description) = _get_name_and_description(entity)
-
-#         alertentity_graph.add_node(name, entitytype=entity['Type'],
-# name=name, description=description,
-# color='green', node_type='entity', source=entity)
-#         new_node = alertentity_graph.nodes[name]
-
-#         if entity['Type'] == 'host':
-#             continue
-
-#         # if this entity has a child object that has a $ref property
-#         for prop, value in [(p,v) for (p,v) in entity.items() if isinstance(v, dict)]:
-#             # Handle references
-#             if '$ref' in value:
-#                 id = value['$ref']
-#             elif '$id' in value and value['$id'] in alert._alert_entities:
-#                 id = value['$id']
-#             else:
-#                 continue
-
-#             if alert._alert_entities[id]['Type'] == 'host':
-#                 continue
-
-#             if id in alert._alert_entities:
-#                 (related_entity, desc) = _get_name_and_description(alert._alert_entities[id])
-#                 if not alertentity_graph.has_edge(related_entity, name):
-#                     if alertentity_graph.has_edge(alert['AlertType'], related_entity):
-#                         alertentity_graph.remove_edge(alert['AlertType'], related_entity)
-#                     alertentity_graph.add_edge(name, related_entity, description=prop,
-# color='green', weight=1, line_type='SHORT_DASH')
-
-#         # if we haven't added an edge to this entity, add one to the alert
-#         if len(alertentity_graph.neighbors(new_node)) == 0:
-#             alertentity_graph.add_edge(alert['AlertType'], name)
 
 
 def _add_alert_node(nx_graph, alert):
@@ -257,8 +206,9 @@ def _get_other_name_desc(entity):
         e_name = entity['Type']
 
     # Nasty dict comprehension to join all other items in the dictionary into a string
-    e_properties = ', '.join({'{}:{}'.format(k, v) for (k, v)
-                              in entity.properties.items() if k not in ('Type', 'Name')})
+    e_properties = '\n'.join({'{}:{}'.format(k, v) for (k, v)
+                              in entity.properties.items() if (k not in ('Type', 'Name') and
+                                                               isinstance(v, str))})
     e_description = '{}\n{})'.format(e_name, e_properties)
     return e_name, e_description
 

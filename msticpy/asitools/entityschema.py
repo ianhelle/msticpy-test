@@ -17,10 +17,11 @@ from . utility import export
 
 __version__ = '0.1'
 __author__ = 'Ian Hellen'
-__all__ = ['Account', 'Alert', 'AzureResource', 'CloudApplication', 'DnsResolve',
-           'ElevationToken', 'Entity', 'Enum', 'File', 'GeoLocation', 'Host',
-           'HostLogonSession', 'IpAddress', 'Malware', 'NetworkConnection',
-           'OSFamily', 'Process', 'RegistryHive', 'RegistryKey', 'RegistryValue']
+__all__ = ['Account', 'Alert', 'AzureResource', 'CloudApplication',
+           'DnsResolve', 'ElevationToken', 'Entity', 'Enum', 'File',
+           'GeoLocation', 'Host', 'HostLogonSession', 'IpAddress',
+           'Malware', 'NetworkConnection', 'OSFamily', 'Process',
+           'RegistryHive', 'RegistryKey', 'RegistryValue']
 
 # pylint: disable=locally-disabled, C0103
 
@@ -96,10 +97,10 @@ class Entity(ABC):
             return self._entity_properties[name]
         if name in self._entity_schema:
             return None
-        raise KeyError
+        raise AttributeError(f'{name} is not a valid attribute.')
 
     def __setattr__(self, name: str, value: any):
-        """Return the value of the named property 'name'."""
+        """Set the value of the named property 'name'."""
         if name == '_entity_properties':
             self.__dict__[name] = value
         elif name in self._entity_schema:
@@ -462,7 +463,7 @@ class Host(Entity):
     @property
     def fqdn(self) -> str:
         """Construct FQDN from host + dns."""
-        if 'DnsDomain' in self:
+        if self.DnsDomain:
             return f'{self.HostName}.{self.DnsDomain}'
         else:
             return self.HostName

@@ -19,6 +19,7 @@ class TestVTLookup(unittest.TestCase):
 
     def test_ipvalidation(self):
 
+        vtlookup = VTLookup(vtkey='fake', verbosity=2)
         test_ips = [
             ('valid', '90.156.201.27', '90.156.201.27'),
             ('local_ip', '10.0.0.1', None),
@@ -27,12 +28,12 @@ class TestVTLookup(unittest.TestCase):
             ('bad_format', '122.1.3', None)]
 
         for test_case in test_ips:
-            result, status = VTLookup._preprocess_observable(test_case[1], 'ipv4')
+            result, status = vtlookup._preprocess_observable(test_case[1], 'ipv4')
             self.assertEqual(result, test_case[2])
             print(test_case[0], status)
 
     def test_urlvalidation(self):
-
+        vtlookup = VTLookup(vtkey='fake', verbosity=2)
         v1_url = 'http://club-fox.ru/img/www.loginalibaba.com/alibaba/alibaba/login.alibaba.com.php?email=biuro'
         v2_url = 'https://www.virustotal.com/en/ip-address/90.156.201.27/information/'
         test_urls = [
@@ -48,9 +49,9 @@ class TestVTLookup(unittest.TestCase):
             ('invalid4', 'http//10.0.0.1/foo.txt', None)]
 
         for test_case in test_urls:
-            result, status = VTLookup._preprocess_observable(test_case[1], 'url')
-            self.assertEqual(result, test_case[2])
+            result, status = vtlookup._preprocess_observable(test_case[1], 'url')
             print(test_case[0], status)
+            self.assertEqual(result, test_case[2], f'Failed on test case {test_case} ({test_case[1]})')
 
     def test_parse_file_results(self):
         vtlookup = VTLookup(vtkey='fake', verbosity=2)

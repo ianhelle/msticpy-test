@@ -100,8 +100,7 @@ class TestQueryManager(unittest.TestCase):
             pass
         self.assertIsNone(q_result)
 
-        alertid = {
-            'provider_alert_id': '{some guid}'}
+        alertid = {'system_alert_id': '{some guid}'}
 
         qptest2 = QPTest(alertid)
         # Try with different query that expects an additional 
@@ -111,7 +110,7 @@ class TestQueryManager(unittest.TestCase):
         self.assertIn('SecurityAlert', q_result)
         self.assertIn('project', q_result)
         self.assertIn('2018-11-23', q_result)
-        self.assertIn('ProviderAlertId', q_result)
+        self.assertIn('SystemAlertId', q_result)
         self.assertIn('{some guid}', q_result)
         
         q_result3 = queries.get_alert(provs=[qptest1, qptest2])
@@ -119,7 +118,7 @@ class TestQueryManager(unittest.TestCase):
         self.assertIn('SecurityAlert', q_result3)
         self.assertIn('project', q_result3)
         self.assertIn('2018-11-23', q_result3)
-        self.assertIn('ProviderAlertId', q_result3)
+        self.assertIn('SystemAlertId', q_result3)
         self.assertIn('{some guid}', q_result3)
         
     def test_builtin_query_params(self):

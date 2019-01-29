@@ -15,6 +15,7 @@ __version__ = '0.1'
 __author__ = 'Ian Hellen'
 
 
+# TODO Refactor to simpler data structure
 class DataSchema:
     """DataSchema class for ASI Log Analytics Queries."""
 
@@ -88,10 +89,33 @@ class DataSchema:
                                             TargetLogonId,
                                             LogonProcessName,
                                             LogonType,
-                                            AuthPckgName,
+                                            AuthenticationPackageName,
                                             Status,
                                             IpAddress,
                                             WorkstationName'''}
+
+    _ACCOUNT_LOGON_FAIL_WIN = {'table': 'SecurityEvent | where EventID == 4625',
+                               'query_project': '''| project
+                                            TenantId,
+                                            Account,
+                                            EventID,
+                                            TimeGenerated,
+                                            SourceComputerId,
+                                            Computer,
+                                            SubjectUserName,
+                                            SubjectDomainName,
+                                            SubjectUserSid,
+                                            TargetUserName,
+                                            TargetDomainName,
+                                            TargetUserSid,
+                                            TargetLogonId,
+                                            LogonProcessName,
+                                            LogonType,
+                                            AuthenticationPackageName,
+                                            Status,
+                                            IpAddress,
+                                            WorkstationName'''}
+
     _PROC_CREATE_LX = {'table': 'LinuxAuditD | where EventID == 14688',
                        'query_project': '''| project
                                             TenantId,
@@ -140,7 +164,7 @@ class DataSchema:
                                             TargetLogonId=ses,
                                             LogonProcessName=exe,
                                             LogonType=0,
-                                            AuthPckgName=op,
+                                            AuthenticationPackageName,
                                             Status=res,
                                             audit_user,
                                             IpAddress=addr,
@@ -149,13 +173,14 @@ class DataSchema:
     DATA_MAPPINGS[DataEnvironment.LogAnalytics][DataFamily.SecurityAlert] = {
         'security_alert': _SECURITY_ALERT}
     DATA_MAPPINGS[DataEnvironment.LogAnalytics][DataFamily.WindowsSecurity] = {
-        'process_create': _PROC_CREATE_WIN, 'account_logon': _ACCOUNT_LOGON_WIN}
+        'process_create': _PROC_CREATE_WIN, 'account_logon': _ACCOUNT_LOGON_WIN,
+        'account_logon_fail': _ACCOUNT_LOGON_FAIL_WIN}
     DATA_MAPPINGS[DataEnvironment.LogAnalytics][DataFamily.LinuxSecurity] = {
         'process_create': _PROC_CREATE_LX, 'account_logon': _ACCOUNT_LOGON_LX}
 
-    def __init__(self, environment=DataEnvironment.LogAnalytics,
-                 data_family=DataFamily.WindowsSecurity,
-                 data_source='security_alert'):
+    def __init__(self, environment: DataEnvironment = DataEnvironment.LogAnalytics,
+                 data_family: DataFamily = DataFamily.WindowsSecurity,
+                 data_source: str = 'security_alert'):
         """
         Create a new instance of the DataSchema object.
 

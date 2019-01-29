@@ -95,7 +95,7 @@ class TestQuerySchema(unittest.TestCase):
         self.assertGreaterEqual(len(alert['ExtendedProperties']), 0)
         self.assertIn('StartTimeUtc', alert)
         self.assertIn('EndTimeUtc', alert)
-        self.assertIn('ProviderAlertId', alert)
+        self.assertIn('SystemAlertId', alert)
         self.assertIn('SystemAlertId', alert)
         self.assertIn('ProviderName', alert)
         self.assertIn('VendorName', alert)

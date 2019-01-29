@@ -20,11 +20,13 @@ import pandas as pd
 from sklearn.cluster import DBSCAN
 from sklearn.preprocessing import Normalizer
 
-__all__ = ['dbcluster_events']
+from .. asitools.utility import export
+
 __version__ = '0.1'
 __author__ = 'Ian Hellen'
 
 
+@export
 def dbcluster_events(data, cluster_columns=None, verbose=False, normalize=True,
                      time_column='TimeCreatedUtc',
                      max_cluster_distance=0.01, min_cluster_samples=2,
@@ -93,6 +95,8 @@ def dbcluster_events(data, cluster_columns=None, verbose=False, normalize=True,
               ', '.join([str(c) for c in counts]))
 
     # Iterate through clusters, adding exemplar to output frame
+    # pylint: disable=C0200
+    # we need to know the index of the item within the loop
     for idx in range(len(cluster_set)):
         cluster_id = cluster_set[idx]
         class_members = labels == cluster_id
@@ -119,17 +123,14 @@ def dbcluster_events(data, cluster_columns=None, verbose=False, normalize=True,
                                            LastEventTime=last_event_time)[0:1],
                 sort=False)
 
+    # pylint: enable=C0200
     if verbose:
         print('Cluster output rows: ', len(clustered_events))
 
     return clustered_events, db_cluster, x_norm
 
 
-def _string_score(input_str):
-    """Sum the ord(c) for characters in a string."""
-    return sum([ord(x) for x in input_str])
-
-
+@export
 def add_process_features(input_frame, path_separator=None, force=False):
     r"""
     Add numerical features based on patterns of command line and process name.
@@ -155,7 +156,6 @@ def add_process_features(input_frame, path_separator=None, force=False):
         commandlineScore: sum of ord() value of characters in commandline
         commandlineLogScore: log10 of commandlineScore
     """
-
     output_df = input_frame.copy()
 
     # Set any NaN values to empty string
@@ -215,9 +215,9 @@ def add_process_features(input_frame, path_separator=None, force=False):
                                                                  x.commandlineLen)
                                                              if x.commandlineLen else 0, axis=1)
         if 'commandlineTokensFull' not in output_df or force:
+            delim_rgx = r'[\s\-\\/\.,"\'|&:;%$()]'
             output_df['commandlineTokensFull'] = output_df[['CommandLine']].apply(lambda x:
-                                                                                  x.str.count(
-                                                                                      r'[\s\-\\/\.,"\'|&:;%$()]'),
+                                                                                  x.str.count(delim_rgx),
                                                                                   axis=1)
 
         if 'commandlineScore' not in output_df or force:
@@ -240,3 +240,33 @@ def add_process_features(input_frame, path_separator=None, force=False):
                                                            axis=1)
 
     return output_df
+
+
+@export
+def delim_count(input_row: pd.Series, column: str,
+                delim_list: str = r'[\s\-\\/\.,"\'|&:;%$()]'):
+    r"""
+    Count the delimiters in input column.
+
+        :param input_row:pd.Series: The series to process
+        :param column:str: Column name
+        :param delim_list:str=r'[\s\-\\/\."\'|&:;%$()]: delimiters to use.
+    """
+    return input_row[column].str.count(delim_list)
+
+
+@export
+def char_ord_score(input_row: pd.Series, column: str):
+    """
+    Return sum of ord values of characters in string.
+
+        :param input_row:pd.Series: The series to process
+        :param column:str: Column name
+    """
+    return sum([ord(x) for x in input_row[column]])
+
+
+def _string_score(input_str):
+    """Sum the ord(c) for characters in a string."""
+    return sum([ord(x) for x in input_str])
+

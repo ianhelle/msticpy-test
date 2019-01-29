@@ -26,7 +26,7 @@ _DATA_ENVIRONMENT_NAME = 'data_environment'
 @export
 def print_kql(query_string: str):
     """Print kql query stripped of comments and newline characters."""
-    clean_qry = clean_kql_query(query_string)
+    clean_qry = re.sub(r'(//[^\"\'\n]+)', ' ', query_string, re.MULTILINE).strip()
     for line in clean_qry.split('\n'):
         print(line.strip())
 

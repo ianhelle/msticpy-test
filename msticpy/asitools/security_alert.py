@@ -71,9 +71,9 @@ class SecurityAlert(SecurityBase):
 
         """
         params_dict = super().query_params
-        if ('provider_alert_id' not in params_dict or
-                params_dict['provider_alert_id'] is None):
-            params_dict['provider_alert_id'] = self._ids['ProviderAlertId']
+        if ('system_alert_id' not in params_dict or
+                params_dict['system_alert_id'] is None):
+            params_dict['system_alert_id'] = self._ids['SystemAlertId']
         return params_dict
 
     def to_html(self, show_entities=False):
@@ -85,7 +85,7 @@ class SecurityAlert(SecurityBase):
                    name=self._source_data['AlertDisplayName'],
                    entity=self._source_data.get(
                        'CompromisedEntity', 'unknown'),
-                   id=self._source_data['ProviderAlertId'])
+                   id=self._source_data['SystemAlertId'])
         return title + super().to_html(show_entities)
 
     # Public methods
