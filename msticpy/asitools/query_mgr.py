@@ -12,10 +12,10 @@ from . query_schema import DataSchema
 from . query_builtin_queries import query_definitions
 from . query_defns import KqlQuery, QueryParamProvider, DataFamily, DataEnvironment
 from . utility import export
+from .. _version import VERSION
 
-__version__ = '0.1'
+__version__ = VERSION
 __author__ = 'Ian Hellen'
-__all__ = ['KqlQuery']
 
 # module constants
 _DATA_FAMILY_NAME = 'data_family'
@@ -77,7 +77,7 @@ def add_query(kql_query: KqlQuery = None, **kwargs):
         :param kql_query:KqlQuery:
     """
     if kql_query is None:
-        def_data_families = [DataEnvironment.LogAnalytics],
+        def_data_families = [DataEnvironment.LogAnalytics]
         def_data_environments = [
             DataFamily.WindowsSecurity, DataFamily.LinuxSecurity]
         if 'name' not in kwargs or 'query' not in kwargs or 'data_source' not in kwargs:
@@ -149,7 +149,8 @@ def replace_prov_query_params(query_name: str, **kwargs) -> str:
                 (override default values and values extracted
                 from QueryParamProviders).
     Raises:
-        LookupError -- query_name cannot be found
+        LookupError -- query_name cannot be found.
+        ValueError -- query parameter value could not be found.
 
     Returns:
         string -- substituted query
@@ -159,16 +160,12 @@ def replace_prov_query_params(query_name: str, **kwargs) -> str:
         raise LookupError(f'Unknown query "{query_name}"')
 
     kql_query = query_definitions[query_name]
-    try:
-        if 'provs' in kwargs:
-            p_args = kwargs.pop('provs')
-            query_params = _get_query_params(kql_query, *p_args, **kwargs)
-        else:
-            query_params = _get_query_params(kql_query, **kwargs)
-        return kql_query.query.format(**query_params)
-    except (LookupError, ValueError):
-        query_help(query_name)
-        raise
+    if 'provs' in kwargs:
+        p_args = kwargs.pop('provs')
+        query_params = _get_query_params(kql_query, *p_args, **kwargs)
+    else:
+        query_params = _get_query_params(kql_query, **kwargs)
+    return kql_query.query.format(**query_params)
 
 
 def _get_query_params(kql_query, *args, **kwargs):
@@ -242,11 +239,12 @@ def _get_query_params(kql_query, *args, **kwargs):
             missing_params = [p_name for p_name, p_value in req_params.items() if not p_value]
 
         if missing_params:
-            # check for optional parameters
+            # check for and remove optional parameters from the missing params list
             for m_param in missing_params:
                 if m_param in kql_query.optional_params:
-                    req_params[m_param] = '**optional_value**'
-            missing_params = [p_name for p_name, p_value in req_params.items() if not p_value]
+                    req_params[m_param] = ''
+            missing_params = [p_name for p_name in missing_params
+                              if p_name not in kql_query.optional_params]
 
         if missing_params:
             # If still have missing params then we error out

@@ -18,9 +18,10 @@ from urllib3.exceptions import LocationParseError
 from urllib3.util import parse_url
 
 from . iocextract import IoCExtract
+from .. asitools.utility import export, pd_version_23
+from .. _version import VERSION
 
-__all__ = ['VTLookup']
-__version__ = '0.1'
+__version__ = VERSION
 __author__ = 'Ian Hellen'
 
 # VirusTotal parameter collection
@@ -32,6 +33,7 @@ DuplicateStatus = namedtuple('DuplicateStatus', ['is_dup', 'status'])
 PreProcessResult = namedtuple('PreProcessResult', ['observable', 'status'])
 
 
+@export
 class VTLookup:
     """
     VTLookup: VirusTotal lookup of IoC reports.
@@ -104,7 +106,7 @@ class VTLookup:
         """Return list of VirusTotal supported IoC type names."""
         return list(self._VT_API_TYPES.keys())
 
-# noqa: D102
+# flake8: noqa: D102
     @property
     def ioc_vt_type_mapping(self) -> dict({str: str}):
         """Return mapping between internal and VirusTotal IoC type names."""
@@ -360,8 +362,13 @@ class VTLookup:
                     df_dict_vtresults['Observable'] = observables[result_idx]
                     df_dict_vtresults['SourceIndex'] = source_row_index[observables[result_idx]]
 
-            new_results = pd.concat(
-                objs=[self.results, df_dict_vtresults], ignore_index=True, sort=False, axis=0)
+            if pd_version_23():
+                new_results = pd.concat(
+                    objs=[self.results, df_dict_vtresults], ignore_index=True, sort=False, axis=0)
+            else:
+                new_results = pd.concat(
+                    objs=[self.results, df_dict_vtresults], ignore_index=True, axis=0)
+
             self.results = new_results
         # pylint enable=locally-disabled, C0200
 
@@ -496,8 +503,12 @@ class VTLookup:
             original_indices = [v[0] for v in duplicate[['SourceIndex']].values]
             duplicate['SourceIndex'] = source_index
             duplicate['Status'] = 'Duplicate'
-            new_results = pd.concat(
-                objs=[self.results, duplicate], ignore_index=True, sort=False, axis=0)
+            if pd_version_23():
+                new_results = pd.concat(
+                    objs=[self.results, duplicate], ignore_index=True, sort=False, axis=0)
+            else:
+                new_results = pd.concat(
+                    objs=[self.results, duplicate], ignore_index=True, axis=0)
             self.results = new_results
 
             return DuplicateStatus(True, 'Duplicates of {}'.format(original_indices))
@@ -519,6 +530,7 @@ class VTLookup:
         new_row['Status'] = status
         new_row['SourceIndex'] = source_idx
         new_results = self.results.append(new_row.to_dict(), ignore_index=True)
+
         self.results = new_results
 
     def _vt_submit_request(self, submission_string, vt_param):

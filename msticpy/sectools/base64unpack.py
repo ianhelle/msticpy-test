@@ -25,19 +25,21 @@ get_hashes(binary): Return md5, sha1 and sha256 hashes of input byte string
 """
 
 import base64
+import binascii
+import gzip
 import hashlib
 import io
+import re
 import tarfile
 import zipfile
-import gzip
-import re
-import binascii
 from collections import namedtuple
+
 import pandas as pd
 
-__all__ = ['unpack_items', 'get_items_from_gzip', 'get_items_from_zip',
-           'get_items_from_tar', 'get_hashes']
-__version__ = '0.1'
+from .. asitools.utility import pd_version_23, export
+from .. _version import VERSION
+
+__version__ = VERSION
 __author__ = 'Ian Hellen'
 
 _RESULT_FIELDS = ['reference', 'original_string', 'file_name', 'file_type',
@@ -92,6 +94,7 @@ _debug_trace = False
 # pylint: enable=locally-disabled, C0103
 
 
+@export
 def unpack_items(input_string=None, data=None, column=None, trace=False):
     """
     Base64 decode an input string or multiple strings taken from a pandas dataframe column.
@@ -146,7 +149,11 @@ def unpack_items(input_string=None, data=None, column=None, trace=False):
             if output_df is None:
                 output_df = output_frame
             else:
-                output_df = output_df.append(output_frame, ignore_index=True, sort=False)
+                if pd_version_23():
+                    output_df = output_df.append(output_frame, ignore_index=True,
+                                                 sort=False)
+                else:
+                    output_df = output_df.append(output_frame, ignore_index=True)
         return output_df
     return None
 
@@ -286,9 +293,14 @@ def _decode_b64_string_recursive(input_string, undecodable_strings=None,
                         new_row['md5'] = new_row['file_hashes']['md5']
                         new_row['sha1'] = new_row['file_hashes']['sha1']
                         new_row['sha256'] = new_row['file_hashes']['sha256']
-                        binary_records = binary_records.append(new_row,
-                                                               ignore_index=True,
-                                                               sort=False)
+
+                        if pd_version_23():
+                            binary_records = binary_records.append(new_row,
+                                                                   ignore_index=True,
+                                                                   sort=False)
+                        else:
+                            binary_records = binary_records.append(new_row,
+                                                                   ignore_index=True)
 
                 # replace the decoded fragment in our current results string (decode_string)
                 decoded_string = decoded_string.replace(b64match.groupdict()['b64'],
@@ -483,12 +495,14 @@ def _get_items_from_archive(binary, archive_type='zip'):
         return 'unknown', {archive_type, binary}
 
 
+@export
 def get_items_from_gzip(binary):
     """Return decompressed gzip contents."""
     archive_file = gzip.decompress(binary)
     return 'gz', {'gzip_file': archive_file}
 
 
+@export
 def get_items_from_zip(binary):
     """Return dictionary of zip contents."""
     file_obj = io.BytesIO(binary)
@@ -500,6 +514,7 @@ def get_items_from_zip(binary):
     return 'zip', archive_dict
 
 
+@export
 def get_items_from_tar(binary):
     """Return dictionary of tar file contents."""
     file_obj = io.BytesIO(binary)
@@ -514,6 +529,7 @@ def get_items_from_tar(binary):
     return 'tar', archive_dict
 
 
+@export
 def get_hashes(binary):
     """Return md5, sha1 and sha256 hashes of input byte string."""
     hash_dict = dict()

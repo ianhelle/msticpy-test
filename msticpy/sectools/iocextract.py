@@ -10,9 +10,10 @@ from collections import namedtuple, defaultdict
 from urllib.parse import unquote
 
 import pandas as pd
+from .. asitools.utility import export
+from .. _version import VERSION
 
-__all__ = ['IoCExtract']
-__version__ = '0.1'
+__version__ = VERSION
 __author__ = 'Ian Hellen'
 
 
@@ -23,6 +24,7 @@ def _compile_regex(regex):
 IoCPattern = namedtuple('IoCPattern', ['ioc_type', 'comp_regex', 'priority'])
 
 
+@export
 class IoCExtract(object):
     """
     IoC Extractor - looks for common IoC patterns in input strings.
@@ -147,7 +149,7 @@ class IoCExtract(object):
                 if the data parameter is used.
             :param src: source string in which to look for IoC patterns
             :param os_family: 'Linux' or 'Windows'
-            
+
         Returns:
             dict of found observables (if input is a string) or
             DataFrame of observables
@@ -161,6 +163,7 @@ class IoCExtract(object):
         - Observable: the actual value of the observable
         - SourceIndex: the index of the row in the input DataFrame from
         which the source for the IoC observable was extracted.
+
         """
         if src and src.strip():
             return self._scan_for_iocs(src, os_family)

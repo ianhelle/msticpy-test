@@ -7,6 +7,8 @@
 import sys
 from IPython.core.display import display, HTML
 
+import pandas as pd
+
 
 def string_empty(string):
     """Return True if the input string is None or whitespace."""
@@ -74,3 +76,12 @@ def export(func):
     else:
         mod.__all__ = [func.__name__]
     return func
+
+
+_PD_INSTALLED_VERSION = tuple(pd.__version__.split('.'))
+_PD_VER_23 = ('0', '23', '0')
+
+
+def pd_version_23() -> bool:
+    """Return True if pandas version 0.23.0 or later is installed."""
+    return _PD_INSTALLED_VERSION >= _PD_VER_23
