@@ -9,7 +9,7 @@ requests==2.21.0
 attrs==18.2.0
 matplotlib==3.0.2
 maxminddb_geolite2==2018.703
-ipython==7.2.0
+ipython==7.16.3
 Kqlmagic==0.1.90
 attr==0.3.1
 scikit_learn==0.20.2
